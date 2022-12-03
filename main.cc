@@ -20,7 +20,7 @@ using std::string;
 using std::vector;
 
 constexpr double C = 1.0;
-constexpr std::chrono::milliseconds TIME_LIMIT(960);
+constexpr std::chrono::milliseconds TIME_LIMIT(970);
 
 template <typename T>
 using Board = array<array<T, 9>, 9>;
@@ -39,13 +39,17 @@ struct Coord {
 class SmartBoard {
  public:
   bool Place(const Coord& pos, POINT stone_type);
-  vector<Coord> GetVaildPlace(POINT stone_type) const;
+  vector<Coord> GetValidPlace(POINT stone_type) const;
 
  private:
   Board<POINT> board_{};
   Board<STATE> state_{};
+  Board<int> liberties_{};
 
-  void dfs_affected_empty(int x, int y, Board<bool>& searched, bool start);
+  void dfs_affected_pos(int x, int y, Board<bool>& searched);
+  int dfs_count_liberties(int x, int y, Board<bool>& searched);
+  void dfs_change_liberties(int x, int y, int liberties);
+  void update_empty(int x, int y);
 };
 
 std::random_device random_device;
@@ -65,12 +69,6 @@ inline int rand() {
   static std::uniform_int_distribution<int> d(1, 81);
   return d(random_engine);
 }
-
-int dfs_count_liberties(const Board<POINT>& current_board, int x, int y,
-                        POINT stone_type);
-
-bool check_can_place(Board<POINT> current_board, int x, int y,
-                     POINT stone_type);
 
 // MCTS start
 struct Node {
@@ -142,17 +140,42 @@ int main() {
 }
 
 bool SmartBoard::Place(const Coord& pos, POINT stone_type) {
-  if ((board_[pos.x][pos.y] & state_[pos.x][pos.y]) != 0) return false;
-  board_[pos.x][pos.y] = stone_type;
-  state_[pos.x][pos.y] = STATE_FORBID;
+  const int &x = pos.x, y = pos.y;
+  if ((board_[x][y] & state_[x][y]) != 0) return false;
+  board_[x][y] = stone_type;
+  state_[x][y] = STATE_FORBID;
 
-  Board<bool> searched{};
-  dfs_affected_empty(pos.x, pos.y, searched, true);
+  {
+    Board<bool> searched{};
+    dfs_change_liberties(x, y, dfs_count_liberties(x, y, searched));
+  }
+  {
+    for (int i = 0; i < 4; i++) {
+      int nx = x + ((i + 1) % 2) * (i - 1);
+      int ny = y + (i % 2) * (i - 2);
+      if (!in_board(nx, ny)) continue;
+      Board<bool> searched{};
+      dfs_change_liberties(nx, ny, dfs_count_liberties(nx, ny, searched));
+    }
+  }
+  {
+    Board<bool> searched{};
+    dfs_affected_pos(x, y, searched);
+
+    for (int i = 0; i < 4; i++) {
+      int nx = x + ((i + 1) % 2) * (i - 1);
+      int ny = y + (i % 2) * (i - 2);
+      if (!in_board(nx, ny)) continue;
+      if (board_[nx][ny] == other_stone_type(board_[x][y])) {
+        dfs_affected_pos(nx, ny, searched);
+      }
+    }
+  }
 
   return true;
 }
 
-vector<Coord> SmartBoard::GetVaildPlace(POINT stone_type) const {
+vector<Coord> SmartBoard::GetValidPlace(POINT stone_type) const {
   vector<Coord> res{};
   for (int i = 0; i < 9; i++) {
     for (int j = 0; j < 9; j++) {
@@ -164,8 +187,7 @@ vector<Coord> SmartBoard::GetVaildPlace(POINT stone_type) const {
   return res;
 }
 
-void SmartBoard::dfs_affected_empty(int x, int y, Board<bool>& searched,
-                                    bool start) {
+void SmartBoard::dfs_affected_pos(int x, int y, Board<bool>& searched) {
   searched[x][y] = true;
 
   for (int i = 0; i < 4; i++) {
@@ -173,70 +195,97 @@ void SmartBoard::dfs_affected_empty(int x, int y, Board<bool>& searched,
     int ny = y + (i % 2) * (i - 2);
     if (!in_board(nx, ny)) continue;
     if (board_[nx][ny] == POINT_EMPTY) {
-      if (!check_can_place(board_, nx, ny, POINT_BLACK)) {
-        state_[nx][ny] = STATE(state_[nx][ny] | STATE_FORBID_BLACK);
-      }
-      if (!check_can_place(board_, nx, ny, POINT_WHITE)) {
-        state_[nx][ny] = STATE(state_[nx][ny] | STATE_FORBID_WHITE);
-      }
-    } else if (!searched[nx][ny] && (start || board_[x][y] == board_[nx][ny])) {
-      dfs_affected_empty(nx, ny, searched, false);
+      update_empty(nx, ny);
+    } else if (!searched[nx][ny] && board_[x][y] == board_[nx][ny]) {
+      dfs_affected_pos(nx, ny, searched);
     }
   }
 }
-
-int dfs_count_liberties(const Board<POINT>& current_board, int x, int y,
-                        POINT stone_type, Board<bool>& searched) {
-  searched[x][y] = true;
+int SmartBoard::dfs_count_liberties(int x, int y, Board<bool>& searched) {
   int cnt = 0;
-  // 奇技淫巧
+  searched[x][y] = true;
   for (int i = 0; i < 4; i++) {
     int nx = x + ((i + 1) % 2) * (i - 1);
     int ny = y + (i % 2) * (i - 2);
-    if (in_board(nx, ny)) {
-      if (current_board[nx][ny] == stone_type && !searched[nx][ny]) {
-        cnt += dfs_count_liberties(current_board, nx, ny, stone_type, searched);
-      } else if (current_board[nx][ny] == POINT_EMPTY) {
+    if (!in_board(nx, ny)) continue;
+    if (!searched[nx][ny]) {
+      if (board_[nx][ny] == board_[x][y]) {
+        cnt += dfs_count_liberties(nx, ny, searched);
+      } else if (board_[nx][ny] == POINT_EMPTY) {
         cnt += 1;
+        searched[nx][ny] = true;
       }
     }
   }
   return cnt;
 }
-
-bool check_can_place(Board<POINT> current_board, int x, int y,
-                     POINT stone_type) {
-  if (!in_board(x, y) || current_board[x][y] != POINT_EMPTY) {
-    return false;
-  }
-
-  current_board[x][y] = stone_type;
-
-  Board<bool> searched{};  // 这个searched不用重置
-
-  if (dfs_count_liberties(current_board, x, y, stone_type, searched) == 0) {
-    return false;
-  }
-
-  POINT other = other_stone_type(stone_type);
-
-  // 奇技淫巧
+void SmartBoard::dfs_change_liberties(int x, int y, int liberties) {
+  liberties_[x][y] = liberties;
   for (int i = 0; i < 4; i++) {
     int nx = x + ((i + 1) % 2) * (i - 1);
     int ny = y + (i % 2) * (i - 2);
-    if (in_board(nx, ny) && current_board[nx][ny] == other &&
-        dfs_count_liberties(current_board, nx, ny, other, searched) == 0) {
-      return false;
+    if (!in_board(nx, ny) || board_[nx][ny] != board_[x][y] ||
+        liberties_[nx][ny] == liberties)
+      continue;
+    dfs_change_liberties(nx, ny, liberties);
+  }
+}
+void SmartBoard::update_empty(int x, int y) {
+  state_[x][y] = STATE_ALLOW;
+
+  bool is_eye = true;
+  bool will_black_suicide = true, will_white_suicide = true;
+  bool exist_black = false, exist_white = false;
+  POINT eye_type = POINT_EMPTY;
+
+  for (int i = 0; i < 4; i++) {
+    int nx = x + ((i + 1) % 2) * (i - 1);
+    int ny = y + (i % 2) * (i - 2);
+    if (!in_board(nx, ny)) continue;
+
+    if (board_[nx][ny] == POINT_EMPTY) {
+      is_eye = false;
+      will_black_suicide = false;
+      will_white_suicide = false;
+    } else if (is_eye) {
+      if (eye_type == POINT_EMPTY)
+        eye_type = board_[nx][ny];
+      else if (eye_type != board_[nx][ny])
+        is_eye = false;
+    }
+
+    if (board_[nx][ny] == POINT_WHITE) {
+      exist_white = true;
+      if (liberties_[nx][ny] <= 1) {
+        state_[x][y] = STATE(state_[x][y] | STATE_FORBID_BLACK);
+      } else {
+        will_white_suicide = false;
+      }
+    }
+    if (board_[nx][ny] == POINT_BLACK) {
+      exist_black = true;
+      if (liberties_[nx][ny] <= 1) {
+        state_[x][y] = STATE(state_[x][y] | STATE_FORBID_WHITE);
+      } else {
+        will_black_suicide = false;
+      }
     }
   }
-  return true;
+  if ((is_eye && eye_type == POINT_BLACK) ||
+      (will_white_suicide && exist_white)) {
+    state_[x][y] = STATE(state_[x][y] | STATE_FORBID_WHITE);
+  }
+  if ((is_eye && eye_type == POINT_WHITE) ||
+      (will_black_suicide && exist_black)) {
+    state_[x][y] = STATE(state_[x][y] | STATE_FORBID_BLACK);
+  }
 }
 
 Node::Node(SmartBoard& board, const Coord& pos, Node* parent,
            POINT current_stone)
-    : pos(pos), parent(parent), stone_type(current_stone) {
+    : pos(pos), stone_type(current_stone), parent(parent) {
   if (pos.x != -1) board.Place(pos, current_stone);
-  can_place = board.GetVaildPlace(other_stone_type(current_stone));
+  can_place = board.GetValidPlace(other_stone_type(current_stone));
 
   if (can_place.empty()) {
     terminal = true;
@@ -304,7 +353,7 @@ double rollout(SmartBoard& board, POINT current_stone) {
 }
 
 Coord rollout_policy(const SmartBoard& board, POINT current_stone) {
-  vector<Coord> can_place = board.GetVaildPlace(current_stone);
+  vector<Coord> can_place = board.GetValidPlace(current_stone);
   if (can_place.empty()) {
     return Coord{-1, -1};
   } else {
@@ -320,9 +369,9 @@ void backup(Node* node, double result, POINT current_stone) {
 }
 
 Node* best_child(Node* node) {
-  auto result = node->child[0];
-  for (int i = 0; i < node->child.size(); i++) {
-    auto current = node->child[i];
+  auto result = *node->child.begin();
+  for (auto i = node->child.begin(); i < node->child.end(); i++) {
+    auto current = *i;
     current->ucb1 = (current->v) / (current->n + 1) +
                     C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
     if (current->ucb1 > result->ucb1) {

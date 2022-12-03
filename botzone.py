@@ -111,6 +111,8 @@ if __name__ == '__main__':
             ret.stdin.close()
             out = str(ret.stdout.readline(), encoding='utf-8').strip()
             pos = out.split(' ')
+            print("debug info: %s" %
+                  (str(ret.stdout.readline(), encoding='utf-8').strip()))
 
             m.new_response(pos[0], pos[1])
 
