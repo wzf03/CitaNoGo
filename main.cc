@@ -3,76 +3,30 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
-#include <random>
 #include <string>
-#include <vector>
+
+#include "board.h"
+#include "rand.h"
 
 #ifndef SIMPLE_REACT
 #include <nlohmann/json.hpp>
 using nlohmann::json;
 #endif
 
-using std::array;
+using namespace cita;
 using std::cin;
 using std::cout;
 using std::endl;
 using std::string;
-using std::vector;
 
 constexpr double C = 1.0;
 constexpr std::chrono::milliseconds TIME_LIMIT(970);
 
-template <typename T>
-using Board = array<array<T, 9>, 9>;
-
-enum POINT { POINT_EMPTY = 0b00, POINT_BLACK = 0b01, POINT_WHITE = 0b10 };
-enum STATE {
-  STATE_ALLOW = 0b00,
-  STATE_FORBID_BLACK = 0b01,
-  STATE_FORBID_WHITE = 0b10,
-  STATE_FORBID = 0b11
-};
-struct Coord {
-  int x, y;
-};
-
-class SmartBoard {
- public:
-  bool Place(const Coord& pos, POINT stone_type);
-  vector<Coord> GetValidPlace(POINT stone_type) const;
-
- private:
-  Board<POINT> board_{};
-  Board<STATE> state_{};
-  Board<int> liberties_{};
-
-  void dfs_affected_pos(int x, int y, Board<bool>& searched);
-  int dfs_count_liberties(int x, int y, Board<bool>& searched);
-  void dfs_change_liberties(int x, int y, int liberties);
-  void update_empty(int x, int y);
-};
-
-std::random_device random_device;
-std::default_random_engine random_engine(random_device());
-
 long long LOOPTIMES = 0;
-
-inline POINT other_stone_type(const POINT& point) {
-  return point == POINT_WHITE ? POINT_BLACK : POINT_WHITE;
-}
-
-inline bool in_board(int x, int y) {
-  return x >= 0 && y >= 0 && x < 9 && y < 9;
-}
-
-inline int rand() {
-  static std::uniform_int_distribution<int> d(1, 81);
-  return d(random_engine);
-}
 
 // MCTS start
 struct Node {
-  Coord pos{};
+  Position pos{};
   double ucb1{};
   int n{};
   double v{};
@@ -81,27 +35,29 @@ struct Node {
   POINT stone_type{};
 
   Node* parent{nullptr};
-  vector<Node*> child{};
-  vector<Coord> can_place{};
+  BoardGameArr<Node*> child{};
+  int num_child{};
+  BoardGameArr<Position> can_place{};
+  int num_can_place{};
 
-  Node(SmartBoard& board, const Coord& pos, Node* parent, POINT current_stone);
+  Node(Board& board, const Position& pos, Node* parent, POINT current_stone);
   ~Node();
-  Node* expand(SmartBoard& board);
+  Node* expand(Board& board);
 };
 
-Coord MCTsearch(SmartBoard& board, Node* root, POINT current_stone);
-Node* tree_policy(SmartBoard& board, Node* root);
-double rollout(SmartBoard& board, POINT current_stone);
-Coord rollout_policy(const SmartBoard& board, POINT current_stone);
+Position MCTsearch(Board& board, Node* root, POINT current_stone);
+Node* tree_policy(Board& board, Node* root);
+double rollout(Board& board, POINT current_stone);
+Position rollout_policy(const Board& board, POINT current_stone);
 void backup(Node* node, double result, POINT current_stone);
 Node* best_child(Node* node);
 // MCTS end
 
 int main() {
   POINT current = POINT_BLACK;
-  SmartBoard board{};
+  Board board{};
 #ifdef SIMPLE_REACT
-  int n;
+  int n{};
   cin >> n;
   int cnt = 2 * n - 1;
 #else
@@ -120,177 +76,35 @@ int main() {
 
     if (x == -1) continue;
 
-    board.Place(Coord{x, y}, current);
+    board.Place(getPos(x, y), current);
 
-    current = other_stone_type(current);
+    current = getOpp(current);
   }
 
-  Node root(board, Coord{-1, -1}, nullptr, other_stone_type(current));
-  Coord result = MCTsearch(board, &root, current);
+  Node root(board, 0, nullptr, getOpp(current));
+  Position result = MCTsearch(board, &root, current);
 
 #ifdef SIMPLE_REACT
-  cout << result.x << ' ' << result.y << endl;
+  cout << getX(result) << ' ' << getY(result) << endl;
   cout << "loop_times: " << LOOPTIMES << endl;
 #else
-  json response = {{"response", {{"x", result.x}, {"y", result.y}}},
+  json response = {{"response", {{"x", getX(result)}, {"y", getY(result)}}},
                    {"debug", {{"loop_times", LOOPTIMES}}}};
 
   cout << response.dump() << endl;
 #endif
 }
 
-bool SmartBoard::Place(const Coord& pos, POINT stone_type) {
-  const int &x = pos.x, y = pos.y;
-  if ((board_[x][y] & state_[x][y]) != 0) return false;
-  board_[x][y] = stone_type;
-  state_[x][y] = STATE_FORBID;
-
-  {
-    Board<bool> searched{};
-    dfs_change_liberties(x, y, dfs_count_liberties(x, y, searched));
-  }
-  {
-    for (int i = 0; i < 4; i++) {
-      int nx = x + ((i + 1) % 2) * (i - 1);
-      int ny = y + (i % 2) * (i - 2);
-      if (!in_board(nx, ny)) continue;
-      Board<bool> searched{};
-      dfs_change_liberties(nx, ny, dfs_count_liberties(nx, ny, searched));
-    }
-  }
-  {
-    Board<bool> searched{};
-    dfs_affected_pos(x, y, searched);
-
-    for (int i = 0; i < 4; i++) {
-      int nx = x + ((i + 1) % 2) * (i - 1);
-      int ny = y + (i % 2) * (i - 2);
-      if (!in_board(nx, ny)) continue;
-      if (board_[nx][ny] == other_stone_type(board_[x][y])) {
-        dfs_affected_pos(nx, ny, searched);
-      }
-    }
-  }
-
-  return true;
-}
-
-vector<Coord> SmartBoard::GetValidPlace(POINT stone_type) const {
-  vector<Coord> res{};
-  for (int i = 0; i < 9; i++) {
-    for (int j = 0; j < 9; j++) {
-      if ((state_[i][j] & stone_type) == 0) {
-        res.emplace_back(Coord{i, j});
-      }
-    }
-  }
-  return res;
-}
-
-void SmartBoard::dfs_affected_pos(int x, int y, Board<bool>& searched) {
-  searched[x][y] = true;
-
-  for (int i = 0; i < 4; i++) {
-    int nx = x + ((i + 1) % 2) * (i - 1);
-    int ny = y + (i % 2) * (i - 2);
-    if (!in_board(nx, ny)) continue;
-    if (board_[nx][ny] == POINT_EMPTY) {
-      update_empty(nx, ny);
-    } else if (!searched[nx][ny] && board_[x][y] == board_[nx][ny]) {
-      dfs_affected_pos(nx, ny, searched);
-    }
-  }
-}
-int SmartBoard::dfs_count_liberties(int x, int y, Board<bool>& searched) {
-  int cnt = 0;
-  searched[x][y] = true;
-  for (int i = 0; i < 4; i++) {
-    int nx = x + ((i + 1) % 2) * (i - 1);
-    int ny = y + (i % 2) * (i - 2);
-    if (!in_board(nx, ny)) continue;
-    if (!searched[nx][ny]) {
-      if (board_[nx][ny] == board_[x][y]) {
-        cnt += dfs_count_liberties(nx, ny, searched);
-      } else if (board_[nx][ny] == POINT_EMPTY) {
-        cnt += 1;
-        searched[nx][ny] = true;
-      }
-    }
-  }
-  return cnt;
-}
-void SmartBoard::dfs_change_liberties(int x, int y, int liberties) {
-  liberties_[x][y] = liberties;
-  for (int i = 0; i < 4; i++) {
-    int nx = x + ((i + 1) % 2) * (i - 1);
-    int ny = y + (i % 2) * (i - 2);
-    if (!in_board(nx, ny) || board_[nx][ny] != board_[x][y] ||
-        liberties_[nx][ny] == liberties)
-      continue;
-    dfs_change_liberties(nx, ny, liberties);
-  }
-}
-void SmartBoard::update_empty(int x, int y) {
-  state_[x][y] = STATE_ALLOW;
-
-  bool is_eye = true;
-  bool will_black_suicide = true, will_white_suicide = true;
-  bool exist_black = false, exist_white = false;
-  POINT eye_type = POINT_EMPTY;
-
-  for (int i = 0; i < 4; i++) {
-    int nx = x + ((i + 1) % 2) * (i - 1);
-    int ny = y + (i % 2) * (i - 2);
-    if (!in_board(nx, ny)) continue;
-
-    if (board_[nx][ny] == POINT_EMPTY) {
-      is_eye = false;
-      will_black_suicide = false;
-      will_white_suicide = false;
-    } else if (is_eye) {
-      if (eye_type == POINT_EMPTY)
-        eye_type = board_[nx][ny];
-      else if (eye_type != board_[nx][ny])
-        is_eye = false;
-    }
-
-    if (board_[nx][ny] == POINT_WHITE) {
-      exist_white = true;
-      if (liberties_[nx][ny] <= 1) {
-        state_[x][y] = STATE(state_[x][y] | STATE_FORBID_BLACK);
-      } else {
-        will_white_suicide = false;
-      }
-    }
-    if (board_[nx][ny] == POINT_BLACK) {
-      exist_black = true;
-      if (liberties_[nx][ny] <= 1) {
-        state_[x][y] = STATE(state_[x][y] | STATE_FORBID_WHITE);
-      } else {
-        will_black_suicide = false;
-      }
-    }
-  }
-  if ((is_eye && eye_type == POINT_BLACK) ||
-      (will_white_suicide && exist_white)) {
-    state_[x][y] = STATE(state_[x][y] | STATE_FORBID_WHITE);
-  }
-  if ((is_eye && eye_type == POINT_WHITE) ||
-      (will_black_suicide && exist_black)) {
-    state_[x][y] = STATE(state_[x][y] | STATE_FORBID_BLACK);
-  }
-}
-
-Node::Node(SmartBoard& board, const Coord& pos, Node* parent,
-           POINT current_stone)
+Node::Node(Board& board, const Position& pos, Node* parent, POINT current_stone)
     : pos(pos), stone_type(current_stone), parent(parent) {
-  if (pos.x != -1) board.Place(pos, current_stone);
-  can_place = board.GetValidPlace(other_stone_type(current_stone));
+  if (pos != 0) board.Place(pos, current_stone);
+  can_place = board.GetValidPlace(getOpp(current_stone), num_can_place);
 
-  if (can_place.empty()) {
+  if (num_can_place == 0) {
     terminal = true;
   }
-  std::shuffle(can_place.begin(), can_place.end(), random_engine);
+  std::shuffle(can_place.begin(), can_place.begin() + num_can_place,
+               getDefaultRD());
 }
 Node::~Node() {
   for (auto c : child) {
@@ -298,31 +112,31 @@ Node::~Node() {
   }
 }
 
-Node* Node::expand(SmartBoard& board) {
+Node* Node::expand(Board& board) {
   if (full_expanded == true) return nullptr;
-  child.emplace_back(new Node(board, can_place[child.size()], this,
-                              other_stone_type(stone_type)));
-  if (child.size() == can_place.size()) {
+  child[num_child++] =
+      new Node(board, can_place[num_child], this, getOpp(stone_type));
+  if (num_child == num_can_place) {
     full_expanded = true;
   }
-  return child[child.size() - 1];
+  return child[num_child - 1];
 }
 
-Coord MCTsearch(SmartBoard& board, Node* root, POINT current_stone) {
+Position MCTsearch(Board& board, Node* root, POINT current_stone) {
   auto begin = std::chrono::steady_clock::now();
   while (std::chrono::duration<double>(std::chrono::steady_clock::now() -
                                        begin) < TIME_LIMIT) {
-    SmartBoard current = board;
+    Board current = board;
     Node* leaf = tree_policy(current, root);
-    double value = rollout(current, other_stone_type(leaf->stone_type));
-    backup(leaf, value, other_stone_type(leaf->stone_type));
+    double value = rollout(current, getOpp(leaf->stone_type));
+    backup(leaf, value, getOpp(leaf->stone_type));
 
     LOOPTIMES++;
   }
   return best_child(root)->pos;
 }
 
-Node* tree_policy(SmartBoard& board, Node* root) {
+Node* tree_policy(Board& board, Node* root) {
   Node* result = root;
   while (!result->terminal) {
     result->n++;
@@ -338,12 +152,12 @@ Node* tree_policy(SmartBoard& board, Node* root) {
   return result;
 }
 
-double rollout(SmartBoard& board, POINT current_stone) {
+double rollout(Board& board, POINT current_stone) {
   POINT init_stone = current_stone;
-  Coord p;
-  while (p = rollout_policy(board, current_stone), p.x != -1) {
+  Position p;
+  while (p = rollout_policy(board, current_stone), p != 0) {
     board.Place(p, current_stone);
-    current_stone = other_stone_type(current_stone);
+    current_stone = getOpp(current_stone);
   }
   if (init_stone == current_stone) {
     return 0.0;
@@ -352,12 +166,13 @@ double rollout(SmartBoard& board, POINT current_stone) {
   }
 }
 
-Coord rollout_policy(const SmartBoard& board, POINT current_stone) {
-  vector<Coord> can_place = board.GetValidPlace(current_stone);
-  if (can_place.empty()) {
-    return Coord{-1, -1};
+Position rollout_policy(const Board& board, POINT current_stone) {
+  int len{};
+  BoardGameArr<Position> can_place = board.GetValidPlace(current_stone, len);
+  if (len == 0) {
+    return 0;
   } else {
-    return can_place[rand() % can_place.size()];
+    return can_place[randInt() % len];
   }
 }
 
@@ -370,13 +185,14 @@ void backup(Node* node, double result, POINT current_stone) {
 
 Node* best_child(Node* node) {
   auto result = *node->child.begin();
-  for (auto i = node->child.begin(); i < node->child.end(); i++) {
+  for (auto i = node->child.begin(); i < node->child.begin() + node->num_child;
+       i++) {
     auto current = *i;
     current->ucb1 = (current->v) / (current->n + 1) +
                     C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
     if (current->ucb1 > result->ucb1) {
       result = current;
-    } else if (current->ucb1 == result->ucb1 && rand() % 2 == 0) {
+    } else if (current->ucb1 == result->ucb1 && randInt() % 2 == 0) {
       result = current;
     }
   }
