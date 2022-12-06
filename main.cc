@@ -35,21 +35,22 @@ struct Node {
   POINT stone_type{};
 
   Node* parent{nullptr};
+
   BoardGameArr<Node*> child{};
   int num_child{};
   BoardGameArr<Position> can_place{};
   int num_can_place{};
 
-  Node(Board& board, const Position& pos, Node* parent, POINT current_stone);
+  Node(Board& board, const Position& pos, Node* parent, POINT currentStone);
   ~Node();
   Node* expand(Board& board);
 };
 
-Position MCTsearch(Board& board, Node* root, POINT current_stone);
+Position MCTsearch(Board& board, Node* root, POINT currentStone);
 Node* tree_policy(Board& board, Node* root);
-double rollout(Board& board, POINT current_stone);
-Position rollout_policy(const Board& board, POINT current_stone);
-void backup(Node* node, double result, POINT current_stone);
+double rollout(Board& board, POINT currentStone);
+Position rollout_policy(const Board& board, POINT currentStone);
+void backup(Node* node, double result, POINT currentStone);
 Node* best_child(Node* node);
 // MCTS end
 
@@ -59,10 +60,10 @@ int main() {
 #ifdef SIMPLE_REACT
   int n{};
   cin >> n;
-  int cnt = 2 * n - 1;
+  int cnt{2 * n - 1};
 #else
   json input = json::parse(cin);
-  int cnt = static_cast<int>(input["requests"].size() * 2 - 1);
+  int cnt{static_cast<int>(input["requests"].size() * 2 - 1)};
 #endif
 
   for (int i = 0; i < cnt; i++) {
@@ -82,7 +83,7 @@ int main() {
   }
 
   Node root(board, 0, nullptr, getOpp(current));
-  Position result = MCTsearch(board, &root, current);
+  Position result{MCTsearch(board, &root, current)};
 
 #ifdef SIMPLE_REACT
   cout << getX(result) << ' ' << getY(result) << endl;
@@ -95,10 +96,10 @@ int main() {
 #endif
 }
 
-Node::Node(Board& board, const Position& pos, Node* parent, POINT current_stone)
-    : pos(pos), stone_type(current_stone), parent(parent) {
-  if (pos != 0) board.Place(pos, current_stone);
-  can_place = board.GetValidPlace(getOpp(current_stone), num_can_place);
+Node::Node(Board& board, const Position& pos, Node* parent, POINT currentStone)
+    : pos(pos), stone_type(currentStone), parent(parent) {
+  if (pos != 0) board.Place(pos, currentStone);
+  can_place = board.GetValidPlace(getOpp(currentStone), num_can_place);
 
   if (num_can_place == 0) {
     terminal = true;
@@ -122,13 +123,13 @@ Node* Node::expand(Board& board) {
   return child[num_child - 1];
 }
 
-Position MCTsearch(Board& board, Node* root, POINT current_stone) {
-  auto begin = std::chrono::steady_clock::now();
+Position MCTsearch(Board& board, Node* root, POINT currentStone) {
+  auto begin{std::chrono::steady_clock::now()};
   while (std::chrono::duration<double>(std::chrono::steady_clock::now() -
                                        begin) < TIME_LIMIT) {
-    Board current = board;
-    Node* leaf = tree_policy(current, root);
-    double value = rollout(current, getOpp(leaf->stone_type));
+    Board current{board};
+    Node* leaf{tree_policy(current, root)};
+    double value{rollout(current, getOpp(leaf->stone_type))};
     backup(leaf, value, getOpp(leaf->stone_type));
 
     LOOPTIMES++;
@@ -137,7 +138,7 @@ Position MCTsearch(Board& board, Node* root, POINT current_stone) {
 }
 
 Node* tree_policy(Board& board, Node* root) {
-  Node* result = root;
+  Node* result{root};
   while (!result->terminal) {
     result->n++;
     if (result->full_expanded) {
@@ -152,42 +153,42 @@ Node* tree_policy(Board& board, Node* root) {
   return result;
 }
 
-double rollout(Board& board, POINT current_stone) {
-  POINT init_stone = current_stone;
+double rollout(Board& board, POINT currentStone) {
+  POINT initStone{currentStone};
   Position p;
-  while (p = rollout_policy(board, current_stone), p != 0) {
-    board.Place(p, current_stone);
-    current_stone = getOpp(current_stone);
+  while (p = rollout_policy(board, currentStone), p != 0) {
+    board.Place(p, currentStone);
+    currentStone = getOpp(currentStone);
   }
-  if (init_stone == current_stone) {
+  if (initStone == currentStone) {
     return 0.0;
   } else {
     return 1.0;
   }
 }
 
-Position rollout_policy(const Board& board, POINT current_stone) {
+Position rollout_policy(const Board& board, POINT currentStone) {
   int len{};
-  BoardGameArr<Position> can_place = board.GetValidPlace(current_stone, len);
+  BoardGameArr<Position> canPlace{board.GetValidPlace(currentStone, len)};
   if (len == 0) {
     return 0;
   } else {
-    return can_place[randInt() % len];
+    return canPlace[randInt() % len];
   }
 }
 
-void backup(Node* node, double result, POINT current_stone) {
+void backup(Node* node, double result, POINT currentStone) {
   while (node != nullptr) {
-    node->v += node->stone_type == current_stone ? result : 1 - result;
+    node->v += node->stone_type == currentStone ? result : 1 - result;
     node = node->parent;
   }
 }
 
 Node* best_child(Node* node) {
-  auto result = *node->child.begin();
-  for (auto i = node->child.begin(); i < node->child.begin() + node->num_child;
+  auto result{*node->child.begin()};
+  for (auto i{node->child.begin()}; i < node->child.begin() + node->num_child;
        i++) {
-    auto current = *i;
+    auto current{*i};
     current->ucb1 = (current->v) / (current->n + 1) +
                     C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
     if (current->ucb1 > result->ucb1) {

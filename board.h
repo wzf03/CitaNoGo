@@ -38,8 +38,8 @@ inline int getY(Position pos) { return pos / (MAX_SIZE + 1) - 1; }
 class Board {
  public:
   Board();
-  bool Place(const Position& pos, POINT stone_type);
-  BoardGameArr<Position> GetValidPlace(POINT stone_type, int& len) const;
+  bool Place(const Position& pos, POINT stoneType);
+  BoardGameArr<Position> GetValidPlace(POINT stoneType, int& len) const;
 
  private:
   BoardArr<POINT> board_{};

@@ -79,7 +79,7 @@ void Board::dfs_affected_pos(Position pos, BoardArr<bool>& searched) {
       })
 }
 int Board::dfs_count_liberties(Position pos, BoardArr<bool>& searched) {
-  int cnt = 0;
+  int cnt{0};
   searched[pos] = true;
   FOREACHADJ(Position adj = pos + ADJOFFSET; if (!searched[adj]) {
     if (board_[adj] == board_[pos]) {
@@ -102,45 +102,43 @@ void Board::dfs_change_liberties(Position pos, int liberties) {
 void Board::update_empty(Position pos) {
   state_[pos] = STATE_ALLOW;
 
-  bool is_eye = true;
-  bool will_black_suicide = true, will_white_suicide = true;
-  bool exist_black = false, exist_white = false;
-  POINT eye_type = POINT_EMPTY;
+  bool isEye{true};
+  bool willBlackSuicide{true}, willWhiteSuicide{true};
+  bool existBlack{false}, existWhite{false};
+  POINT eyeType{POINT_EMPTY};
 
   FOREACHADJ(
       Position adj = pos + ADJOFFSET; if (board_[adj] == POINT_EMPTY) {
-        is_eye = false;
-        will_black_suicide = false;
-        will_white_suicide = false;
-      } else if (is_eye && board_[adj] != POINT_WALL) {
-        if (eye_type == POINT_EMPTY)
-          eye_type = board_[adj];
-        else if (eye_type == getOpp(board_[adj]))
-          is_eye = false;
+        isEye = false;
+        willBlackSuicide = false;
+        willWhiteSuicide = false;
+      } else if (isEye && board_[adj] != POINT_WALL) {
+        if (eyeType == POINT_EMPTY)
+          eyeType = board_[adj];
+        else if (eyeType == getOpp(board_[adj]))
+          isEye = false;
       }
 
       if (board_[adj] == POINT_WHITE) {
-        exist_white = true;
+        existWhite = true;
         if (liberties_[adj] <= 1) {
           state_[pos] = STATE(state_[pos] | STATE_FORBID_BLACK);
         } else {
-          will_white_suicide = false;
+          willWhiteSuicide = false;
         }
       } if (board_[adj] == POINT_BLACK) {
-        exist_black = true;
+        existBlack = true;
         if (liberties_[adj] <= 1) {
           state_[pos] = STATE(state_[pos] | STATE_FORBID_WHITE);
         } else {
-          will_black_suicide = false;
+          willBlackSuicide = false;
         }
       })
 
-  if ((is_eye && eye_type == POINT_BLACK) ||
-      (will_white_suicide && exist_white)) {
+  if ((isEye && eyeType == POINT_BLACK) || (willWhiteSuicide && existWhite)) {
     state_[pos] = STATE(state_[pos] | STATE_FORBID_WHITE);
   }
-  if ((is_eye && eye_type == POINT_WHITE) ||
-      (will_black_suicide && exist_black)) {
+  if ((isEye && eyeType == POINT_WHITE) || (willBlackSuicide && existBlack)) {
     state_[pos] = STATE(state_[pos] | STATE_FORBID_BLACK);
   }
 }
