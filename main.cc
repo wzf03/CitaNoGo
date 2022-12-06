@@ -20,7 +20,7 @@ using std::endl;
 using std::string;
 
 constexpr double C = 1.0;
-constexpr std::chrono::milliseconds TIME_LIMIT(970);
+constexpr std::chrono::milliseconds TIME_LIMIT(950);
 
 long long LOOPTIMES = 0;
 
@@ -107,8 +107,8 @@ Node::Node(Board& board, const Position& pos, Node* parent, POINT current_stone)
                getDefaultRD());
 }
 Node::~Node() {
-  for (auto c : child) {
-    delete c;
+  for (auto i = child.begin(); i < child.begin() + num_child; i++) {
+    delete *i;
   }
 }
 

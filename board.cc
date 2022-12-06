@@ -112,10 +112,10 @@ void Board::update_empty(Position pos) {
         is_eye = false;
         will_black_suicide = false;
         will_white_suicide = false;
-      } else if (is_eye) {
+      } else if (is_eye && board_[adj] != POINT_WALL) {
         if (eye_type == POINT_EMPTY)
           eye_type = board_[adj];
-        else if (eye_type != board_[adj])
+        else if (eye_type == getOpp(board_[adj]))
           is_eye = false;
       }
 
