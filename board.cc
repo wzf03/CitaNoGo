@@ -2,16 +2,16 @@
 
 #include <iostream>
 #include <vector>
-#define FOREACHADJ(BLOCK)                 \
-  {                                       \
-    Position ADJOFFSET = -(MAX_SIZE + 1); \
-    {BLOCK};                              \
-    ADJOFFSET = -1;                       \
-    {BLOCK};                              \
-    ADJOFFSET = 1;                        \
-    {BLOCK};                              \
-    ADJOFFSET = MAX_SIZE + 1;             \
-    {BLOCK};                              \
+#define FOREACHADJ(BLOCK)                                                      \
+  {                                                                            \
+    Position ADJOFFSET = -(MAX_SIZE + 1);                                      \
+    {BLOCK};                                                                   \
+    ADJOFFSET = -1;                                                            \
+    {BLOCK};                                                                   \
+    ADJOFFSET = 1;                                                             \
+    {BLOCK};                                                                   \
+    ADJOFFSET = MAX_SIZE + 1;                                                  \
+    {BLOCK};                                                                   \
   };
 namespace cita {
 
@@ -26,40 +26,98 @@ Board::Board() {
   }
 }
 
-bool Board::Place(const Position& pos, POINT stone_type) {
+bool Board::Place(const Position &pos, POINT stoneType) {
   if (board_[pos] != POINT_EMPTY || (board_[pos] & state_[pos]) != 0)
     return false;
-  board_[pos] = stone_type;
+  board_[pos] = stoneType;
   state_[pos] = STATE_FORBID;
 
+  // connect the adjacent chain which type == stoneType
+  chain_next_[pos] = pos;
+  chain_head_[pos] = pos;
+  Position chainToConnect[5]{pos};
+  int numChainToConnect{1};
+
+  FOREACHADJ(Position adj = pos + ADJOFFSET; if (board_[adj] == stoneType) {
+    bool alreadyIncluded = false;
+    for (int i = 1; i < numChainToConnect; i++) {
+      if (chain_head_[adj] == chainToConnect[i]) {
+        alreadyIncluded = true;
+        break;
+      }
+    }
+    if (!alreadyIncluded) {
+      chainToConnect[numChainToConnect++] = chain_head_[adj];
+    }
+  })
+
+  int currentChain{0};
+  Position cur{pos};
+  while (currentChain < numChainToConnect) {
+    while (chain_next_[cur] != chainToConnect[currentChain]) {
+      cur = chain_next_[cur];
+      chain_head_[cur] = pos;
+    }
+    chain_next_[cur] = chainToConnect[(++currentChain) % numChainToConnect];
+    chain_head_[cur] = pos;
+    cur = chain_next_[cur];
+  }
+
   {
-    BoardArr<bool> searched{};
-    dfs_change_liberties(pos, dfs_count_liberties(pos, searched));
+    BoardArr<bool> counted{};
+    chain_count_and_change_liberties(pos, counted);
   }
   {
-    FOREACHADJ(Position adj = pos + ADJOFFSET; BoardArr<bool> searched{};
-               if (board_[adj] == getOpp(board_[pos])) dfs_change_liberties(
-                   adj, dfs_count_liberties(adj, searched));)
-  }
-  {
-    BoardArr<bool> searched{};
-    dfs_affected_pos(pos, searched);
+    Position chainChanged[4]{};
+    int numChainChanged{0};
     FOREACHADJ(Position adj = pos + ADJOFFSET;
                if (board_[adj] == getOpp(board_[pos])) {
-                 dfs_affected_pos(adj, searched);
+                 bool alreadyChanged{false};
+                 for (int i = 0; i < numChainToConnect; i++) {
+                   if (chain_head_[adj] == chainChanged[i]) {
+                     alreadyChanged = true;
+                     break;
+                   }
+                 }
+                 if (!alreadyChanged) {
+                   BoardArr<bool> searched{};
+                   chainChanged[numChainChanged++] = chain_head_[adj];
+                   chain_count_and_change_liberties(adj, searched);
+                 }
+               })
+  }
+  {
+    BoardArr<bool> searched{};
+    chain_affected_pos(pos, searched);
+
+    Position chainSearched[4]{};
+    int numChainSearched{0};
+    FOREACHADJ(Position adj = pos + ADJOFFSET;
+               if (board_[adj] == getOpp(board_[pos])) {
+                 bool alreadySearched{false};
+                 for (int i = 0; i < numChainToConnect; i++) {
+                   if (chain_head_[adj] == chainSearched[i]) {
+                     alreadySearched = true;
+                     break;
+                   }
+                 }
+                 if (!alreadySearched) {
+                   chainSearched[numChainSearched++] = chain_head_[adj];
+                   chain_affected_pos(adj, searched);
+                 }
                })
   }
 
   return true;
 }
 
-BoardGameArr<Position> Board::GetValidPlace(POINT stone_type, int& len) const {
+BoardGameArr<Position> Board::GetValidPlace(POINT stoneType, int &len) const {
   BoardGameArr<Position> res{};
   int numres{0};
   for (int i = 0; i < 9; i++) {
     for (int j = 0; j < 9; j++) {
       Position pos = getPos(i, j);
-      if ((state_[pos] & stone_type) == 0) {
+      if ((state_[pos] & stoneType) == 0) {
         res[numres++] = pos;
       }
     }
@@ -68,37 +126,37 @@ BoardGameArr<Position> Board::GetValidPlace(POINT stone_type, int& len) const {
   return res;
 }
 
-void Board::dfs_affected_pos(Position pos, BoardArr<bool>& searched) {
-  searched[pos] = true;
+void Board::chain_affected_pos(Position pos, BoardArr<bool> &searched) {
+  Position cur{pos};
+  do {
+    FOREACHADJ(Position adj = cur + ADJOFFSET;
+               if (!searched[adj] && board_[adj] == POINT_EMPTY) {
+                 update_empty(adj);
+               })
+    cur = chain_next_[cur];
+  } while (cur != pos);
+}
 
-  FOREACHADJ(
-      Position adj = pos + ADJOFFSET; if (board_[adj] == POINT_EMPTY) {
-        update_empty(adj);
-      } else if (!searched[adj] && board_[pos] == board_[adj]) {
-        dfs_affected_pos(adj, searched);
-      })
+void Board::chain_count_and_change_liberties(Position loc,
+                                             BoardArr<bool> &counted) {
+  Position cur{loc};
+  int numLiberties{0};
+  do {
+    FOREACHADJ(Position adj = cur + ADJOFFSET;
+               if (!counted[adj] && board_[adj] == POINT_EMPTY) {
+                 numLiberties++;
+                 counted[adj] = true;
+               })
+    cur = chain_next_[cur];
+  } while (cur != loc);
+
+  cur = loc;
+  do {
+    liberties_[cur] = numLiberties;
+    cur = chain_next_[cur];
+  } while (cur != loc);
 }
-int Board::dfs_count_liberties(Position pos, BoardArr<bool>& searched) {
-  int cnt{0};
-  searched[pos] = true;
-  FOREACHADJ(Position adj = pos + ADJOFFSET; if (!searched[adj]) {
-    if (board_[adj] == board_[pos]) {
-      cnt += dfs_count_liberties(adj, searched);
-    } else if (board_[adj] == POINT_EMPTY) {
-      cnt += 1;
-      searched[adj] = true;
-    }
-  })
-  return cnt;
-}
-void Board::dfs_change_liberties(Position pos, int liberties) {
-  liberties_[pos] = liberties;
-  FOREACHADJ(
-      Position adj = pos + ADJOFFSET;
-      if (!(board_[adj] != board_[pos] || liberties_[adj] == liberties)) {
-        dfs_change_liberties(adj, liberties);
-      })
-}
+
 void Board::update_empty(Position pos) {
   state_[pos] = STATE_ALLOW;
 
@@ -142,4 +200,4 @@ void Board::update_empty(Position pos) {
     state_[pos] = STATE(state_[pos] | STATE_FORBID_BLACK);
   }
 }
-}  // namespace cita
+} // namespace cita

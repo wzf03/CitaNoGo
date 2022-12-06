@@ -99,22 +99,24 @@ if __name__ == '__main__':
     while True:
         fetch(NoGoMatch, url)
         for mid, m in matches.items():
-            ret = subprocess.Popen(
-                os.path.join(os.getcwd(), "build", "Cita"),
-                stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            # 使用 m.current_request 模拟一步对局状态，然后产生动作
-            ret.stdin.write(bytes(m.current_request, encoding='utf-8'))
-            ret.stdin.flush()
-            ret.stdin.close()
-            out = str(ret.stdout.readline(), encoding='utf-8').strip()
-            pos = out.split(' ')
-            print("debug info: %s" %
-                  (str(ret.stdout.readline(), encoding='utf-8').strip()))
+            if m.has_request:
+                print("Processing match %s..." % (mid))
+                ret = subprocess.Popen(
+                    os.path.join(os.getcwd(), "build", "Cita"),
+                    stdout=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                # 使用 m.current_request 模拟一步对局状态，然后产生动作
+                ret.stdin.write(bytes(m.current_request, encoding='utf-8'))
+                ret.stdin.flush()
+                ret.stdin.close()
+                out = str(ret.stdout.readline(), encoding='utf-8').strip()
+                pos = out.split(' ')
+                print("debug info: %s" %
+                      (str(ret.stdout.readline(), encoding='utf-8').strip()))
 
-            m.new_response(pos[0], pos[1])
+                m.new_response(pos[0], pos[1])
 
-            # 将自己的动作存入 m.current_response，同样进行一步模拟
-            m.has_response = True
+                # 将自己的动作存入 m.current_response，同样进行一步模拟
+                m.has_response = True
