@@ -9,7 +9,7 @@ option(BOT_SIMPLE_REACT "use simple react" OFF)
 
 find_package(nlohmann_json 3.2.0 REQUIRED)
 
-add_executable(${PROJECT_NAME} main.cc board.cc rand.cc)
+add_executable(${PROJECT_NAME} main.cc board.cc)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
 

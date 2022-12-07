@@ -2,16 +2,16 @@
 
 #include <iostream>
 #include <vector>
-#define FOREACHADJ(BLOCK)                                                      \
-  {                                                                            \
-    Position ADJOFFSET = -(MAX_SIZE + 1);                                      \
-    {BLOCK};                                                                   \
-    ADJOFFSET = -1;                                                            \
-    {BLOCK};                                                                   \
-    ADJOFFSET = 1;                                                             \
-    {BLOCK};                                                                   \
-    ADJOFFSET = MAX_SIZE + 1;                                                  \
-    {BLOCK};                                                                   \
+#define FOREACHADJ(BLOCK)                 \
+  {                                       \
+    Position ADJOFFSET = -(MAX_SIZE + 1); \
+    {BLOCK};                              \
+    ADJOFFSET = -1;                       \
+    {BLOCK};                              \
+    ADJOFFSET = 1;                        \
+    {BLOCK};                              \
+    ADJOFFSET = MAX_SIZE + 1;             \
+    {BLOCK};                              \
   };
 namespace cita {
 
@@ -200,4 +200,4 @@ void Board::update_empty(Position pos) {
     state_[pos] = STATE(state_[pos] | STATE_FORBID_BLACK);
   }
 }
-} // namespace cita
+}  // namespace cita

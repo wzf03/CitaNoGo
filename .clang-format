@@ -1,4 +1,4 @@
-Lauguage: Cpp
-BaseOnStyle: Google
+Language: Cpp
+BasedOnStyle: Google
 MacroBlockBegin: ''
 MacroBlockEnd:   ''

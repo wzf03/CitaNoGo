@@ -3,10 +3,10 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <random>
 #include <string>
 
 #include "board.h"
-#include "rand.h"
 
 #ifndef SIMPLE_REACT
 #include <nlohmann/json.hpp>
@@ -23,6 +23,10 @@ constexpr double C = 1.0;
 constexpr std::chrono::milliseconds TIME_LIMIT(950);
 
 long long LOOPTIMES = 0;
+
+std::random_device rd;
+std::mt19937_64 re(rd());
+std::uniform_int_distribution<int> dis(0);
 
 // MCTS start
 struct Node {
@@ -104,8 +108,7 @@ Node::Node(Board& board, const Position& pos, Node* parent, POINT currentStone)
   if (num_can_place == 0) {
     terminal = true;
   }
-  std::shuffle(can_place.begin(), can_place.begin() + num_can_place,
-               getDefaultRD());
+  std::shuffle(can_place.begin(), can_place.begin() + num_can_place, re);
 }
 Node::~Node() {
   for (auto i = child.begin(); i < child.begin() + num_child; i++) {
@@ -173,7 +176,7 @@ Position rollout_policy(const Board& board, POINT currentStone) {
   if (len == 0) {
     return 0;
   } else {
-    return canPlace[randInt() % len];
+    return canPlace[dis(re) % len];
   }
 }
 
@@ -193,7 +196,7 @@ Node* best_child(Node* node) {
                     C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
     if (current->ucb1 > result->ucb1) {
       result = current;
-    } else if (current->ucb1 == result->ucb1 && randInt() % 2 == 0) {
+    } else if (current->ucb1 == result->ucb1 && dis(re) % 2 == 0) {
       result = current;
     }
   }
