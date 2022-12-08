@@ -10,11 +10,6 @@ import json
 
 
 class Match:
-    has_request = False
-    has_response = False
-    current_request = None
-    current_response = None
-    matchid = None
 
     def new_request(self, request):
         self.has_request = True
@@ -25,9 +20,9 @@ class Match:
 
 
 class NoGoMatch(Match):
-    current = []
 
     def __init__(self, matchid, first_request):
+        self.current = []
         self.matchid = matchid
         self.new_request(first_request)
 
@@ -100,7 +95,6 @@ if __name__ == '__main__':
         fetch(NoGoMatch, url)
         for mid, m in matches.items():
             if m.has_request:
-                print("Processing match %s..." % (mid))
                 ret = subprocess.Popen(
                     os.path.join(os.getcwd(), "build", "Cita"),
                     stdout=subprocess.PIPE,

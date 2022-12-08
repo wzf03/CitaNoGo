@@ -19,7 +19,7 @@ using std::cout;
 using std::endl;
 using std::string;
 
-constexpr double C = 1.0;
+constexpr double C = 0.5;
 constexpr std::chrono::milliseconds TIME_LIMIT(950);
 
 long long LOOPTIMES = 0;
@@ -28,7 +28,7 @@ std::random_device rd;
 std::mt19937_64 re(rd());
 std::uniform_int_distribution<int> dis(0);
 
-// MCTS start
+//---------------------------- MCTS end ----------------------------------
 struct Node {
   Position pos{};
   double ucb1{};
@@ -45,18 +45,131 @@ struct Node {
   BoardGameArr<Position> can_place{};
   int num_can_place{};
 
-  Node(Board& board, const Position& pos, Node* parent, POINT currentStone);
-  ~Node();
-  Node* expand(Board& board);
+  Node(Board& board, const Position& pos, Node* parent, POINT currentStone)
+      : pos(pos), stone_type(currentStone), parent(parent) {
+    if (pos != 0) board.Place(pos, currentStone);
+    can_place = board.GetValidPlace(getOpp(currentStone), num_can_place);
+
+    if (num_can_place == 0) {
+      terminal = true;
+    }
+    std::shuffle(can_place.begin(), can_place.begin() + num_can_place, re);
+  }
+  ~Node() {
+    for (auto i = child.begin(); i < child.begin() + num_child; i++) {
+      delete *i;
+    }
+  }
+  Node* expand(Board& board) {
+    if (full_expanded == true) return nullptr;
+    child[num_child++] =
+        new Node(board, can_place[num_child], this, getOpp(stone_type));
+    if (num_child == num_can_place) {
+      full_expanded = true;
+    }
+    return child[num_child - 1];
+  }
 };
 
-Position MCTsearch(Board& board, Node* root, POINT currentStone);
-Node* tree_policy(Board& board, Node* root);
-double rollout(Board& board, POINT currentStone);
-Position rollout_policy(const Board& board, POINT currentStone);
-void backup(Node* node, double result, POINT currentStone);
-Node* best_child(Node* node);
-// MCTS end
+Node* best_child(Node* node) {
+  auto result{*node->child.begin()};
+  for (auto i{node->child.begin()}; i < node->child.begin() + node->num_child;
+       i++) {
+    auto current{*i};
+    current->ucb1 = (current->v) / (current->n + 1) +
+                    C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
+    if (current->ucb1 > result->ucb1) {
+      result = current;
+    } else if (current->ucb1 == result->ucb1 && dis(re) % 2 == 0) {
+      result = current;
+    }
+  }
+  return result;
+}
+
+Node* tree_policy(Board& board, Node* root) {
+  Node* result{root};
+  while (!result->terminal) {
+    result->n++;
+    if (result->full_expanded) {
+      result = best_child(result);
+      board.Place(result->pos, result->stone_type);
+    } else {
+      result = result->expand(board);
+      break;
+    }
+  }
+  result->n++;
+  return result;
+}
+
+Position random_rollout_policy(const Board& board, POINT currentStone) {
+  int len{};
+  BoardGameArr<Position> canPlace{board.GetValidPlace(currentStone, len)};
+  if (len == 0) {
+    return 0;
+  } else {
+    return canPlace[dis(re) % len];
+  }
+}
+
+Position greedy_rollout_policy(const Board& board, POINT currentStone) {
+  int len{}, maxGain{-10000};
+  Position result{};
+  BoardGameArr<Position> canPlace{board.GetValidPlace(currentStone, len)};
+
+  if (len == 0) {
+    return 0;
+  }
+
+  for (int i = 0; i < len; i++) {
+    Board current = board;
+    current.Place(canPlace[i], currentStone);
+    int currentGain = current.GetGain(currentStone);
+    if (currentStone > maxGain) {
+      maxGain = currentGain;
+      result = canPlace[i];
+    }
+  }
+  return result;
+}
+
+double rollout(Board& board, POINT currentStone) {
+  POINT initStone{currentStone};
+  Position p;
+  while (p = random_rollout_policy(board, currentStone), p != 0) {
+  // while (p = greedy_rollout_policy(board, currentStone), p != 0) {
+    board.Place(p, currentStone);
+    currentStone = getOpp(currentStone);
+  }
+  if (initStone == currentStone) {
+    return 0.0;
+  } else {
+    return 1.0;
+  }
+}
+
+void backup(Node* node, double result, POINT currentStone) {
+  while (node != nullptr) {
+    node->v += node->stone_type == currentStone ? result : 1 - result;
+    node = node->parent;
+  }
+}
+
+Position MCTsearch(Board& board, Node* root, POINT currentStone) {
+  auto begin{std::chrono::steady_clock::now()};
+  while (std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                       begin) < TIME_LIMIT) {
+    Board current{board};
+    Node* leaf{tree_policy(current, root)};
+    double value{rollout(current, getOpp(leaf->stone_type))};
+    backup(leaf, value, getOpp(leaf->stone_type));
+
+    LOOPTIMES++;
+  }
+  return best_child(root)->pos;
+}
+//---------------------------- MCTS end ----------------------------------
 
 int main() {
   POINT current = POINT_BLACK;
@@ -98,107 +211,4 @@ int main() {
 
   cout << response.dump() << endl;
 #endif
-}
-
-Node::Node(Board& board, const Position& pos, Node* parent, POINT currentStone)
-    : pos(pos), stone_type(currentStone), parent(parent) {
-  if (pos != 0) board.Place(pos, currentStone);
-  can_place = board.GetValidPlace(getOpp(currentStone), num_can_place);
-
-  if (num_can_place == 0) {
-    terminal = true;
-  }
-  std::shuffle(can_place.begin(), can_place.begin() + num_can_place, re);
-}
-Node::~Node() {
-  for (auto i = child.begin(); i < child.begin() + num_child; i++) {
-    delete *i;
-  }
-}
-
-Node* Node::expand(Board& board) {
-  if (full_expanded == true) return nullptr;
-  child[num_child++] =
-      new Node(board, can_place[num_child], this, getOpp(stone_type));
-  if (num_child == num_can_place) {
-    full_expanded = true;
-  }
-  return child[num_child - 1];
-}
-
-Position MCTsearch(Board& board, Node* root, POINT currentStone) {
-  auto begin{std::chrono::steady_clock::now()};
-  while (std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                       begin) < TIME_LIMIT) {
-    Board current{board};
-    Node* leaf{tree_policy(current, root)};
-    double value{rollout(current, getOpp(leaf->stone_type))};
-    backup(leaf, value, getOpp(leaf->stone_type));
-
-    LOOPTIMES++;
-  }
-  return best_child(root)->pos;
-}
-
-Node* tree_policy(Board& board, Node* root) {
-  Node* result{root};
-  while (!result->terminal) {
-    result->n++;
-    if (result->full_expanded) {
-      result = best_child(result);
-      board.Place(result->pos, result->stone_type);
-    } else {
-      result = result->expand(board);
-      break;
-    }
-  }
-  result->n++;
-  return result;
-}
-
-double rollout(Board& board, POINT currentStone) {
-  POINT initStone{currentStone};
-  Position p;
-  while (p = rollout_policy(board, currentStone), p != 0) {
-    board.Place(p, currentStone);
-    currentStone = getOpp(currentStone);
-  }
-  if (initStone == currentStone) {
-    return 0.0;
-  } else {
-    return 1.0;
-  }
-}
-
-Position rollout_policy(const Board& board, POINT currentStone) {
-  int len{};
-  BoardGameArr<Position> canPlace{board.GetValidPlace(currentStone, len)};
-  if (len == 0) {
-    return 0;
-  } else {
-    return canPlace[dis(re) % len];
-  }
-}
-
-void backup(Node* node, double result, POINT currentStone) {
-  while (node != nullptr) {
-    node->v += node->stone_type == currentStone ? result : 1 - result;
-    node = node->parent;
-  }
-}
-
-Node* best_child(Node* node) {
-  auto result{*node->child.begin()};
-  for (auto i{node->child.begin()}; i < node->child.begin() + node->num_child;
-       i++) {
-    auto current{*i};
-    current->ucb1 = (current->v) / (current->n + 1) +
-                    C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
-    if (current->ucb1 > result->ucb1) {
-      result = current;
-    } else if (current->ucb1 == result->ucb1 && dis(re) % 2 == 0) {
-      result = current;
-    }
-  }
-  return result;
 }
