@@ -62,8 +62,9 @@ struct Node {
   }
   Node* expand(Board& board) {
     if (full_expanded == true) return nullptr;
-    child[num_child++] =
+    child[num_child] =
         new Node(board, can_place[num_child], this, getOpp(stone_type));
+    num_child++;
     if (num_child == num_can_place) {
       full_expanded = true;
     }
@@ -77,7 +78,7 @@ Node* best_child(Node* node) {
        i++) {
     auto current{*i};
     current->ucb1 = (current->v) / (current->n + 1) +
-                    C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
+                    C * std::sqrt(std::log(node->n + 1) / (current->n + 1));
     if (current->ucb1 > result->ucb1) {
       result = current;
     } else if (current->ucb1 == result->ucb1 && dis(re) % 2 == 0) {
@@ -138,7 +139,7 @@ double rollout(Board& board, POINT currentStone) {
   POINT initStone{currentStone};
   Position p;
   while (p = random_rollout_policy(board, currentStone), p != 0) {
-  // while (p = greedy_rollout_policy(board, currentStone), p != 0) {
+    // while (p = greedy_rollout_policy(board, currentStone), p != 0) {
     board.Place(p, currentStone);
     currentStone = getOpp(currentStone);
   }
