@@ -19,7 +19,8 @@ using std::cout;
 using std::endl;
 using std::string;
 
-constexpr double C = 0.5;
+constexpr double C = 1;
+constexpr double K = 500;
 constexpr std::chrono::milliseconds TIME_LIMIT(950);
 
 long long LOOPTIMES = 0;
@@ -30,10 +31,10 @@ std::uniform_int_distribution<int> dis(0);
 
 //---------------------------- MCTS end ----------------------------------
 struct Node {
+  int n{}, m{};
   Position pos{};
   double ucb1{};
-  int n{};
-  double v{};
+  double v{}, vrave{};
   bool full_expanded{false};
   bool terminal{false};
   POINT stone_type{};
@@ -77,8 +78,27 @@ Node* best_child(Node* node) {
   for (auto i{node->child.begin()}; i < node->child.begin() + node->num_child;
        i++) {
     auto current{*i};
-    current->ucb1 = (current->v) / (current->n + 1) +
-                    C * std::sqrt(std::log(node->n + 1) / (current->n + 1));
+    double alpha = current->n / (K + current->n);
+    current->ucb1 = alpha * (current->v) / (current->n + 1) +
+                    (1 - alpha) * (current->vrave) / (current->m + 1) +
+                    C * std::sqrt(std::log(node->n + 1)) / (current->n + 1);
+    if (current->ucb1 > result->ucb1) {
+      result = current;
+    } else if (current->ucb1 == result->ucb1 && dis(re) % 2 == 0) {
+      result = current;
+    }
+  }
+  return result;
+}
+
+Node* best_child_without_ucb(Node* node) {
+  auto result{*node->child.begin()};
+  for (auto i{node->child.begin()}; i < node->child.begin() + node->num_child;
+       i++) {
+    auto current{*i};
+    double alpha = current->n / (K + current->n);
+    current->ucb1 = alpha * (current->v) / (current->n + 1) +
+                    (1 - alpha) * (current->vrave) / (current->m + 1);
     if (current->ucb1 > result->ucb1) {
       result = current;
     } else if (current->ucb1 == result->ucb1 && dis(re) % 2 == 0) {
@@ -149,10 +169,26 @@ double rollout(Board& board, POINT currentStone) {
     return 1.0;
   }
 }
+void backup_rave(Node* node, double result, POINT currentStone,
+                 Position action) {
+  while (node != nullptr) {
+    if (node->stone_type != currentStone) {
+      for (int i = 0; i < node->num_child; i++) {
+        if (node->child[i]->pos == action) {
+          node->child[i]->m++;
+          node->child[i]->vrave += result;
+        }
+      }
+    }
+    node = node->parent;
+  }
+}
 
 void backup(Node* node, double result, POINT currentStone) {
   while (node != nullptr) {
-    node->v += node->stone_type == currentStone ? result : 1 - result;
+    double currentV = node->stone_type == currentStone ? result : 1 - result;
+    node->v += currentV;
+    backup_rave(node, currentV, node->stone_type, node->pos);
     node = node->parent;
   }
 }
@@ -168,7 +204,7 @@ Position MCTsearch(Board& board, Node* root, POINT currentStone) {
 
     LOOPTIMES++;
   }
-  return best_child(root)->pos;
+  return best_child_without_ucb(root)->pos;
 }
 //---------------------------- MCTS end ----------------------------------
 
