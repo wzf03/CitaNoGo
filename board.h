@@ -40,13 +40,13 @@ class Board {
   Board();
   bool Place(const Position &pos, POINT stoneType);
   BoardGameArr<Position> GetValidPlace(POINT stoneType, int &len) const;
-  int GetGain(POINT stoneType) const;
 
  private:
   BoardArr<POINT> board_{};
   BoardArr<STATE> state_{};
   BoardArr<int> liberties_{};
-  BoardArr<Position> chain_next_{};  // Circular chain
+  BoardArr<Position> chain_next_{};  // Circular chain, in order to replace the
+                                     // recursive function
   BoardArr<Position> chain_head_{};
   BoardArr<bool> searched_{};
 

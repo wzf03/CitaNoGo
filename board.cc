@@ -126,19 +126,6 @@ BoardGameArr<Position> Board::GetValidPlace(POINT stoneType, int &len) const {
   return res;
 }
 
-int Board::GetGain(POINT stoneType) const {
-  int gain{};
-  for (int i = 0; i < MAX_SIZE; i++) {
-    for (int j = 0; j < MAX_SIZE; j++) {
-      Position pos = getPos(i, j);
-      if (board_[pos] != POINT_EMPTY) continue;
-      gain -= (state_[pos] & stoneType) != 0;
-      gain += (state_[pos] & getOpp(stoneType)) != 0;
-    }
-  }
-  return gain;
-}
-
 void Board::chain_affected_pos(Position pos, BoardArr<bool> &searched) {
   Position cur{pos};
   do {
