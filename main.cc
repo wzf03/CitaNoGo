@@ -32,7 +32,7 @@ int main() {
 
   Node root(board, 0, nullptr, getOpp(current));
   DebugInfo debug{};
-  Position result{UctSearch(board, &root, debug)};
+  Position result{AutoUct(board, &root, cnt, debug)};
 
   json response = {{"response", {{"x", getX(result)}, {"y", getY(result)}}},
                    {"debug", debug.info()}};
@@ -59,7 +59,7 @@ int main() {
 
   Node root(board, 0, nullptr, getOpp(current));
   DebugInfo debug{};
-  Position result{UctSearch(board, &root, debug)};
+  Position result{AutoUct(board, &root, cnt, debug)};
 
   cout << getX(result) << ' ' << getY(result) << endl;
   cout << debug.info() << endl;

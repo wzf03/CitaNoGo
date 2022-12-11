@@ -6,9 +6,10 @@
 #include "board.h"
 
 namespace cita {
-constexpr double C = 1;                               // UCB公式中常数
+constexpr double C = 0.1;                             // UCB公式中常数
 constexpr double K = 500;                             // RAVE优化中常数
 constexpr std::chrono::milliseconds TIME_LIMIT(950);  // 时间限制
+constexpr int MAX_LOOP_TIMES = 400000;                // 循环次数限制
 
 struct Node {
   int n{},  // 当前node被访问次数
@@ -38,10 +39,16 @@ struct Node {
 struct DebugInfo {
   int loop_times{};
   double win_rate{};
+  std::string type{};
+
   std::string info();
 };
 
-// 进行MCTS模拟并返回结果
+// 进行MCTS并返回结果
 Position UctSearch(Board& board, Node* root, DebugInfo& debug);
+// 使用估值函数替代随机模拟的MCTS
+Position UctSearchEvalution(Board& board, Node* root, DebugInfo& debug);
+// 有机结合两种算法
+Position AutoUct(Board& board, Node* root, int round, DebugInfo& debug);
 }  // namespace cita
 #endif

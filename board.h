@@ -40,6 +40,7 @@ class Board {
   Board();
   bool Place(const Position &pos, POINT stoneType);
   BoardGameArr<Position> GetValidPlace(POINT stoneType, int &len) const;
+  int GetValidPlaceCount(POINT stoneType) const;
 
  private:
   BoardArr<POINT> board_{};

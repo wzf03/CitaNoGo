@@ -126,6 +126,19 @@ BoardGameArr<Position> Board::GetValidPlace(POINT stoneType, int &len) const {
   return res;
 }
 
+int Board::GetValidPlaceCount(POINT stoneType) const {
+  int count{0};
+  for (int i = 0; i < 9; i++) {
+    for (int j = 0; j < 9; j++) {
+      Position pos = getPos(i, j);
+      if ((state_[pos] & stoneType) == 0) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
 void Board::chain_affected_pos(Position pos, BoardArr<bool> &searched) {
   Position cur{pos};
   do {

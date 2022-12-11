@@ -49,7 +49,7 @@ Node* Node::expand(Board& board) {
 }
 
 std::string DebugInfo::info() {
-  return "loop_times: " + std::to_string(loop_times) +
+  return "type: " + type + "; loop_times: " + std::to_string(loop_times) +
          "; win_rate: " + std::to_string(win_rate);
 }
 
@@ -171,20 +171,61 @@ void backup(Node* node, double result, POINT currentStone) {
 
 Position UctSearch(Board& board, Node* root, DebugInfo& debug) {
   auto begin{std::chrono::steady_clock::now()};
+  int loop_times{};
   while (std::chrono::duration<double>(std::chrono::steady_clock::now() -
-                                       begin) < TIME_LIMIT) {
+                                       begin) < TIME_LIMIT &&
+         loop_times < MAX_LOOP_TIMES) {
     Board current{board};
     Node* leaf{tree_policy(current, root)};
     double value{rollout(current, getOpp(leaf->stone_type))};
     backup(leaf, value, getOpp(leaf->stone_type));
 
-    debug.loop_times++;
+    loop_times++;
   }
   Node* choice = best_child_without_ucb(root);
 
+  debug.type = "origin";
+  debug.loop_times = loop_times;
   // 最后一次算出的ucb1是不带平衡项的，可以反映算法以为的胜率
   debug.win_rate = choice->ucb1;
 
   return choice->pos;
+}
+
+Position UctSearchEvalution(Board& board, Node* root, DebugInfo& debug) {
+  auto begin{std::chrono::steady_clock::now()};
+  int loop_times{};
+  while (std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                       begin) < TIME_LIMIT &&
+         loop_times < MAX_LOOP_TIMES) {
+    Board current{board};
+    Node* leaf{tree_policy(current, root)};
+
+    int validOur = current.GetValidPlaceCount(leaf->stone_type);
+    int validOpp = current.GetValidPlaceCount(getOpp(leaf->stone_type));
+
+    // sigmoid函数
+    double value{1 / (1 + std::exp(-(validOur - validOpp)))};
+
+    backup(leaf, value, leaf->stone_type);
+
+    loop_times++;
+  }
+  Node* choice = best_child_without_ucb(root);
+
+  debug.type = "evalution";
+  debug.loop_times = loop_times;
+  // 最后一次算出的ucb1是不带平衡项的，可以反映算法以为的胜率
+  debug.win_rate = choice->ucb1;
+
+  return choice->pos;
+}
+
+Position AutoUct(Board& board, Node* root, int round, DebugInfo& debug) {
+  if (round < 10) {
+    return UctSearchEvalution(board, root, debug);
+  } else {
+    return UctSearch(board, root, debug);
+  }
 }
 }  // namespace cita
