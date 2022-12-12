@@ -89,7 +89,6 @@ Node* best_child_without_ucb(Node* node) {
   for (int i = 0; i < node->num_child; i++) {
     Node* currentChild{node->child[i]};
     double alpha = currentChild->n / (K + currentChild->n);
-    double logN = std::log(node->n);
     currentChild->ucb1 = alpha * currentChild->v / currentChild->n +
                          (1 - alpha) * currentChild->vrave / currentChild->m;
 
@@ -226,9 +225,6 @@ Position UctSearchEvalution(Board& board, Node* root, DebugInfo& debug) {
          loop_times < MAX_LOOP_TIMES) {
     Board current{board};
     Node* leaf{tree_policy(current, root)};
-
-    int validOur = current.GetValidPlaceCount(leaf->stone_type);
-    int validOpp = current.GetValidPlaceCount(getOpp(leaf->stone_type));
 
     backup(leaf, evaluate_value(current, leaf), leaf->stone_type);
 
