@@ -69,9 +69,12 @@ Node* best_child(Node* node) {
                          (1 - alpha) * currentChild->vrave / currentChild->m +
                          C * std::sqrt(logN / currentChild->n);
 
+    int maxCount{1};
     if (currentChild->ucb1 > bestChild->ucb1) {
       bestChild = currentChild;
-    } else if (currentChild->ucb1 == bestChild->ucb1 && dis(re) % 2 == 0) {
+      maxCount = 1;
+    } else if (currentChild->ucb1 == bestChild->ucb1 &&
+               dis(re) % (++maxCount) == 0) {
       // 实现如果有多个ucb值相同的子node时随机选取的效果
       bestChild = currentChild;
     }
@@ -90,9 +93,13 @@ Node* best_child_without_ucb(Node* node) {
     currentChild->ucb1 = alpha * currentChild->v / currentChild->n +
                          (1 - alpha) * currentChild->vrave / currentChild->m;
 
+    int maxCount{1};
     if (currentChild->ucb1 > bestChild->ucb1) {
       bestChild = currentChild;
-    } else if (currentChild->ucb1 == bestChild->ucb1 && dis(re) % 2 == 0) {
+      maxCount = 1;
+    } else if (currentChild->ucb1 == bestChild->ucb1 &&
+               dis(re) % (++maxCount) == 0) {
+      // 实现如果有多个ucb值相同的子node时随机选取的效果
       bestChild = currentChild;
     }
   }
@@ -102,7 +109,9 @@ Node* best_child_without_ucb(Node* node) {
 // 从root出发根据ucb值一直找到下一个拓展的node并返回
 Node* tree_policy(Board& board, Node* root) {
   Node* cur{root};
-  while (!cur->terminal) {
+  int depth = 0;
+  while (!cur->terminal && depth < EVAL_DEPTH) {
+    depth++;
     cur->n++;
     if (cur->full_expanded) {
       cur = best_child(cur);
@@ -192,6 +201,23 @@ Position UctSearch(Board& board, Node* root, DebugInfo& debug) {
   return choice->pos;
 }
 
+double evaluate_value(const Board& current, const Node* node) {
+  int validOur = current.GetValidPlaceCount(node->stone_type);
+  int validOpp = current.GetValidPlaceCount(getOpp(node->stone_type));
+
+  int bowlOur = current.GetBowlCount(node->stone_type);
+  int bowlOpp = current.GetBowlCount(getOpp(node->stone_type));
+
+  // sigmoid函数，非线性
+  // double value{1 / (1 + std::exp(-(validOur - validOpp)))};
+
+  // 线性函数
+  double value{0.5 + std::clamp(-0.5, 0.5,
+                                0.15 * (validOur - validOpp) +
+                                    0.05 * (bowlOur - bowlOpp))};
+  return value;
+}
+
 Position UctSearchEvalution(Board& board, Node* root, DebugInfo& debug) {
   auto begin{std::chrono::steady_clock::now()};
   int loop_times{};
@@ -204,10 +230,7 @@ Position UctSearchEvalution(Board& board, Node* root, DebugInfo& debug) {
     int validOur = current.GetValidPlaceCount(leaf->stone_type);
     int validOpp = current.GetValidPlaceCount(getOpp(leaf->stone_type));
 
-    // sigmoid函数
-    double value{1 / (1 + std::exp(-(validOur - validOpp)))};
-
-    backup(leaf, value, leaf->stone_type);
+    backup(leaf, evaluate_value(current, leaf), leaf->stone_type);
 
     loop_times++;
   }
@@ -222,7 +245,7 @@ Position UctSearchEvalution(Board& board, Node* root, DebugInfo& debug) {
 }
 
 Position AutoUct(Board& board, Node* root, int round, DebugInfo& debug) {
-  if (round < 10) {
+  if (round < SWITCH_TIME) {
     return UctSearchEvalution(board, root, debug);
   } else {
     return UctSearch(board, root, debug);

@@ -9,7 +9,9 @@ namespace cita {
 constexpr double C = 0.1;                             // UCB公式中常数
 constexpr double K = 500;                             // RAVE优化中常数
 constexpr std::chrono::milliseconds TIME_LIMIT(950);  // 时间限制
-constexpr int MAX_LOOP_TIMES = 400000;                // 循环次数限制
+constexpr int MAX_LOOP_TIMES = 150000;                // 循环次数限制
+constexpr int SWITCH_TIME = 15;                       // 何时切换算法
+constexpr int EVAL_DEPTH = 7;  // 估值深度，太深了容易瞎搞
 
 struct Node {
   int n{},  // 当前node被访问次数

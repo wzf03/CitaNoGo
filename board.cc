@@ -18,10 +18,13 @@ namespace cita {
 Board::Board() {
   for (int i = 0; i < MAX_ARR_SIZE; i++) {
     board_[i] = POINT_WALL;
+    state_[i] = STATE_FORBID;
   }
   for (int x = 0; x < MAX_SIZE; x++) {
     for (int y = 0; y < MAX_SIZE; y++) {
-      board_[getPos(x, y)] = POINT_EMPTY;
+      int pos = getPos(x, y);
+      board_[pos] = POINT_EMPTY;
+      state_[pos] = STATE_ALLOW;
     }
   }
 }
@@ -132,6 +135,28 @@ int Board::GetValidPlaceCount(POINT stoneType) const {
     for (int j = 0; j < 9; j++) {
       Position pos = getPos(i, j);
       if ((state_[pos] & stoneType) == 0) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+int Board::GetBowlCount(POINT stoneType) const {
+  int count{0};
+  for (int i = 0; i < 9; i++) {
+    for (int j = 0; j < 9; j++) {
+      Position pos = getPos(i, j);
+      if (board_[pos] != POINT_EMPTY && state_[pos] != STATE_ALLOW) continue;
+      int wallOrOurStoneCount{}, emptyCount{};
+      FOREACHADJ(
+          Position adj = pos + ADJOFFSET;
+          if (board_[adj] == POINT_WALL || board_[adj] == stoneType) {
+            wallOrOurStoneCount++;
+          } else if (board_[adj] == POINT_EMPTY) { emptyCount++; } else {
+            continue;  // jump out of outer loop
+          } if (emptyCount > 1) { continue; })
+      if (wallOrOurStoneCount == 3 && emptyCount == 1) {
         count++;
       }
     }
