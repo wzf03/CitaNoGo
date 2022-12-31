@@ -211,9 +211,9 @@ double evaluate_value(const Board& current, const Node* node) {
   // double value{1 / (1 + std::exp(-(validOur - validOpp)))};
 
   // 线性函数
-  double value{0.5 + std::clamp(-0.5, 0.5,
-                                0.15 * (validOur - validOpp) +
-                                    0.05 * (bowlOur - bowlOpp))};
+  double value{0.5 + std::clamp(0.15 * (validOur - validOpp) +
+                                    0.05 * (bowlOur - bowlOpp),
+                                -0.5, 0.5)};
   return value;
 }
 
